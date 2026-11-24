@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install V
+        run: |
+          version="$(cat .v-version)"
+          curl -fsSL "https://github.com/vlang/v/releases/download/${version}/v_linux.zip" -o /tmp/v.zip
+          unzip -q /tmp/v.zip -d "${HOME}"
+          echo "${HOME}/v" >> "${GITHUB_PATH}"
+      - name: Check formatting
+        run: v fmt -verify .
+      - name: Check Markdown
+        run: v check-md README.md
+      - name: Run tests
+        run: v -silent test .
+      - name: Build release binary
+        run: v -prod -o runway .
