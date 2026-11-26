@@ -101,3 +101,64 @@ fn test_warns_on_projected_threshold() {
 	assert result.forecast == 90
 	assert result.status == 'warning'
 }
+
+fn synthetic_series(days int, base f64, last f64) UsageSeries {
+	start := parse_date('2026-10-01') or { panic(err) }
+	mut usage := []DailyUsage{}
+	for i in 0 .. days {
+		day := start.add_days(i)
+		weekend := day.day_of_week() >= 6
+		mut amount := if weekend { base / 4 } else { base + f64(i % 3) }
+		if i == days - 1 {
+			amount = last
+		}
+		usage << DailyUsage{
+			date:   day.ymmdd()
+			amount: amount
+		}
+	}
+	return UsageSeries{
+		source: 'devin'
+		unit:   'acus'
+		days:   usage
+	}
+}
+
+fn test_detects_weekday_burn_spike() {
+	// 2026-11-05 is a Thursday.
+	report := detect_burn_spike(synthetic_series(36, 100, 400), AnomalyOptions{})!
+	assert report.as_of == '2026-11-05'
+	assert report.day_type == 'weekday'
+	assert report.status == 'anomaly'
+	assert report.reason_code == 'BURN_RATE_SPIKE'
+	assert report.median == 101
+}
+
+fn test_normal_day_is_not_an_anomaly() {
+	report := detect_burn_spike(synthetic_series(36, 100, 102), AnomalyOptions{})!
+	assert report.status == 'ok'
+	assert report.reason_code == ''
+}
+
+fn test_weekend_uses_weekend_baseline() {
+	// 2026-11-01 is a Sunday: weekday-level usage is a spike on a weekend.
+	report := detect_burn_spike(synthetic_series(32, 100, 100), AnomalyOptions{})!
+	assert report.day_type == 'weekend'
+	assert report.status == 'anomaly'
+}
+
+fn test_short_history_reports_insufficient_baseline() {
+	report := detect_burn_spike(synthetic_series(10, 100, 400), AnomalyOptions{})!
+	assert report.status == 'insufficient_baseline'
+	assert report.reason_code == 'INSUFFICIENT_BASELINE'
+}
+
+fn test_anomaly_options_validation() {
+	for args in [['--source', 'devin'], ['--source', 'devin', '--file', 'x', '--lookback', '3'],
+		['--source', 'devin', '--file', 'x', '--threshold', '0'],
+		['--bogus', 'x']] {
+		if _ := parse_anomaly_options(args) {
+			assert false, 'expected error for ${args}'
+		}
+	}
+}

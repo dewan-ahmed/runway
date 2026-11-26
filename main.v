@@ -9,6 +9,29 @@ fn main() {
 		print_help()
 		return
 	}
+	if os.args[1] == 'anomalies' {
+		options := parse_anomaly_options(os.args[2..]) or {
+			eprintln('runway: ${err}')
+			exit(3)
+		}
+		series := load_usage(Options{
+			source:  options.source
+			file:    options.file
+			measure: options.measure
+		}) or {
+			eprintln('runway: ${err}')
+			exit(3)
+		}
+		report := detect_burn_spike(series, options) or {
+			eprintln('runway: ${err}')
+			exit(3)
+		}
+		println(json.encode(report))
+		if report.status == 'anomaly' {
+			exit(4)
+		}
+		return
+	}
 	if os.args[1] != 'check' {
 		eprintln('runway: unknown command "${os.args[1]}"')
 		exit(3)

@@ -69,6 +69,32 @@ The command emits one JSON document with:
 Thresholds apply to forecast utilization, so a rapidly growing workload can
 be stopped before the current balance is exhausted.
 
+## Anomalies
+
+```sh
+runway anomalies --source devin --file consumption.json [--as-of DATE] \
+  [--lookback 28] [--threshold 3.5]
+```
+
+Budget thresholds catch a runaway agent only after the spend has added up.
+`anomalies` compares the `--as-of` day (default: latest date in the input)
+with the same day type, weekday or weekend, over the previous `--lookback`
+days. It uses a median/MAD robust z-score, so the result is deterministic
+and easy to explain. Days missing from the window count as zero.
+
+The JSON report includes `baseline_days`, `median`, `mad`, `value`, `score`,
+`status`, and `reason_code`:
+
+| Status | Reason code | Exit code |
+| --- | --- | --- |
+| `ok` | empty | `0` |
+| `anomaly` | `BURN_RATE_SPIKE` | `4` |
+| `insufficient_baseline` | `INSUFFICIENT_BASELINE` | `0` |
+
+The baseline is insufficient when the input does not cover the full lookback
+window, so the command reports that instead of guessing. Exit code `4` is
+kept separate from the budget exit codes so callers can branch on it.
+
 ## Official data references
 
 - [Devin daily consumption API](https://docs.devin.ai/api-reference/v3/consumption/organizations-consumption-daily)
