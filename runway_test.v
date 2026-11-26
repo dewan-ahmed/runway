@@ -1,5 +1,7 @@
 module main
 
+import json
+
 fn test_forecasts_devin_consumption() {
 	content := '{"total_acus":40,"consumption_by_date":[
 		{"date":1793505600,"acus":10},
@@ -158,6 +160,47 @@ fn test_anomaly_options_validation() {
 		['--source', 'devin', '--file', 'x', '--threshold', '0'],
 		['--bogus', 'x']] {
 		if _ := parse_anomaly_options(args) {
+			assert false, 'expected error for ${args}'
+		}
+	}
+}
+
+const session_spans = '{"resourceSpans":[{"scopeSpans":[{"spans":[
+	{"startTimeUnixNano":"1793505600000000000","attributes":[{"key":"session.id","value":{"stringValue":"loop"}},{"key":"cosmos.credits","value":{"doubleValue":60}}]},
+	{"startTimeUnixNano":"1793509200000000000","attributes":[{"key":"session.id","value":{"stringValue":"loop"}},{"key":"cosmos.credits","value":{"doubleValue":30}}]},
+	{"startTimeUnixNano":"1793505600000000000","attributes":[{"key":"session.id","value":{"stringValue":"fix"}},{"key":"cosmos.credits","value":{"doubleValue":5}}]},
+	{"startTimeUnixNano":"1793505600000000000","attributes":[{"key":"cosmos.credits","value":{"doubleValue":5}}]},
+	{"startTimeUnixNano":"1793505600000000000","attributes":[{"key":"session.id","value":{"stringValue":"idle"}}]}
+]}]}]}'
+
+fn test_attributes_spend_to_sessions() {
+	report := attribute_sessions(session_spans, SessionOptions{ session_cap: 50 })!
+	assert report.total == 100
+	assert report.groups == 3
+	assert report.sessions.map(it.key) == ['loop', 'fix', 'unattributed']
+	loop := report.sessions[0]
+	assert loop.amount == 90
+	assert loop.spans == 2
+	assert loop.share == 90
+	assert loop.reason_code == 'RUNAWAY_SESSION'
+	assert loop.last_seen > loop.first_seen
+	assert report.runaway == 1
+	assert report.sessions[1].reason_code == ''
+}
+
+fn test_sessions_without_cap_and_with_top() {
+	report := attribute_sessions(session_spans, SessionOptions{ top: 1 })!
+	assert report.runaway == 0
+	assert report.groups == 3
+	assert report.sessions.len == 1
+	assert !json.encode(report).contains('"first":')
+}
+
+fn test_sessions_options_validation() {
+	for args in [['--file', 'x'], ['--source', 'devin', '--file', 'x'],
+		['--source', 'cosmos'], ['--source', 'cosmos', '--file', 'x', '--top', '0'],
+		['--source', 'cosmos', '--file', 'x', '--group-by', '']] {
+		if _ := parse_session_options(args) {
 			assert false, 'expected error for ${args}'
 		}
 	}

@@ -95,6 +95,23 @@ The baseline is insufficient when the input does not cover the full lookback
 window, so the command reports that instead of guessing. Exit code `4` is
 kept separate from the budget exit codes so callers can branch on it.
 
+## Sessions
+
+```sh
+runway sessions --source cosmos --file traces.json [--measure credits|cost] \
+  [--group-by session.id] [--session-cap 50] [--top 10]
+```
+
+Once `anomalies` flags a spike, `sessions` shows where the spend went. It
+totals Cosmos spend by the `--group-by` span attribute (default
+`session.id`), so any workflow or user attribute works too. Each group
+reports `amount`, `spans`, `first_seen`, `last_seen`, and `share` of the
+total, sorted by spend. Spans without the attribute are grouped as
+`unattributed`, so the groups always add up to `total`.
+
+Groups above `--session-cap` get `reason_code: "RUNAWAY_SESSION"` and the
+command exits `4`. With no cap set, it reports only and exits `0`.
+
 ## Official data references
 
 - [Devin daily consumption API](https://docs.devin.ai/api-reference/v3/consumption/organizations-consumption-daily)

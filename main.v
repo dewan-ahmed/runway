@@ -9,6 +9,29 @@ fn main() {
 		print_help()
 		return
 	}
+	if os.args[1] == 'sessions' {
+		options := parse_session_options(os.args[2..]) or {
+			eprintln('runway: ${err}')
+			exit(3)
+		}
+		content := if options.file == '-' {
+			os.get_raw_lines_joined()
+		} else {
+			os.read_file(options.file) or {
+				eprintln('runway: ${err}')
+				exit(3)
+			}
+		}
+		report := attribute_sessions(content, options) or {
+			eprintln('runway: ${err}')
+			exit(3)
+		}
+		println(json.encode(report))
+		if report.runaway > 0 {
+			exit(4)
+		}
+		return
+	}
 	if os.args[1] == 'anomalies' {
 		options := parse_anomaly_options(os.args[2..]) or {
 			eprintln('runway: ${err}')
@@ -109,6 +132,8 @@ fn print_help() {
 	println('Usage:')
 	println('  runway check --source devin|factory|cosmos --file PATH --budget NUMBER \\')
 	println('    --period-start YYYY-MM-DD --period-end YYYY-MM-DD [options]')
+	println('  runway anomalies --source devin|factory|cosmos --file PATH [--as-of DATE] [--lookback 28] [--threshold 3.5]')
+	println('  runway sessions --source cosmos --file PATH [--group-by session.id] [--session-cap N] [--top 10]')
 	println('')
 	println('Options:')
 	println('  --as-of YYYY-MM-DD      Forecast from this date (default: latest input date)')
